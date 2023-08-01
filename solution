@@ -1,0 +1,75 @@
+import requests
+from bs4 import BeautifulSoup
+import csv
+
+def scrape_product_listings(url, num_pages):
+    all_products = []
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"}
+
+    for page in range(1, num_pages + 1):
+        page_url = url + f"&ref=sr_pg_{page}"
+        response = requests.get(page_url, headers=headers)
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        products = soup.find_all("div", {"data-component-type": "s-search-result"})
+
+        for product in products:
+            product_url = "https://www.amazon.in" + product.find("a", class_="a-link-normal")["href"]
+            product_name = product.find("span", class_="a-size-medium").text.strip()
+            product_price = product.find("span", class_="a-offscreen").text.strip()
+
+            rating_element = product.find("span", class_="a-icon-alt")
+            rating = rating_element.text if rating_element else "Not available"
+
+            num_reviews_element = product.find("span", {"data-cel-widget": "MAIN-SEARCH"})
+            num_reviews = num_reviews_element.text if num_reviews_element else "0"
+
+            all_products.append([product_url, product_name, product_price, rating, num_reviews])
+
+    return all_products
+
+def scrape_product_details(product_urls):
+    all_product_details = []
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"}
+
+    for product_url in product_urls:
+        response = requests.get(product_url, headers=headers)
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        product_asin = soup.find("input", {"name": "ASIN"})["value"]
+
+        product_description_element = soup.find("div", {"id": "productDescription"})
+        product_description = product_description_element.text.strip() if product_description_element else "Not available"
+
+        product_manufacturer_element = soup.find("a", {"id": "bylineInfo"})
+        product_manufacturer = product_manufacturer_element.text.strip() if product_manufacturer_element else "Not available"
+
+        all_product_details.append([product_url, product_asin, product_description, product_manufacturer])
+
+    return all_product_details
+
+def save_to_csv(data, file_name, headers):
+    with open(file_name, "w", newline="", encoding="utf-8") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(headers)
+        writer.writerows(data)
+
+if __name__ == "__main__":
+    # Part 1: Scrape product listings
+    url = "https://www.amazon.in/s?k=bags&crid=2M096C61O4MLT&qid=1653308124&sprefix=ba%2Caps%2C283"
+    num_pages = 20
+    all_products_data = scrape_product_listings(url, num_pages)
+
+    # Save product listings data to CSV
+    csv_headers_part1 = ["Product URL", "Product Name", "Product Price", "Rating", "Number of Reviews"]
+    save_to_csv(all_products_data, "product_listings.csv", csv_headers_part1)
+
+    # Part 2: Scrape product details
+    product_urls_part2 = [product[0] for product in all_products_data[:200]]
+    all_product_details_data = scrape_product_details(product_urls_part2)
+
+    # Save product details data to CSV
+    csv_headers_part2 = ["Product URL", "ASIN", "Product Description", "Manufacturer"]
+    save_to_csv(all_product_details_data, "product_details.csv", csv_headers_part2)
